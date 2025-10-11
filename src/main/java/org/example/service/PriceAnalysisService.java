@@ -1,11 +1,14 @@
+// service/PriceAnalysisService.java (обновленный)
 package org.example.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.example.dto.PriceAnalysisResult;
 import org.example.entity.Product;
 import org.example.repository.ProductRepository;
+import org.example.util.CurrentUserUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,6 +20,9 @@ import java.util.*;
 public class PriceAnalysisService {
 
     private final ProductRepository productRepository;
+    private final HistoryService historyService;
+    private final CurrentUserUtil currentUserUtil;
+    private final ObjectMapper objectMapper;  // Для сериализации в JSON
 
     public List<PriceAnalysisResult> analyzePrices(MultipartFile file) {
         long startTime = System.currentTimeMillis();
@@ -105,12 +111,16 @@ public class PriceAnalysisService {
 
             log.info("Анализ завершен за {} мс для {} элементов", (System.currentTimeMillis() - startTime), results.size());
 
+            // Сохраняем историю запроса
+            String requestDetails = "Анализ цен: файл " + file.getOriginalFilename();
+            String responseDetails = objectMapper.writeValueAsString(results);
+            historyService.saveHistory(currentUserUtil.getCurrentClient(), requestDetails, responseDetails);
+
+            return results;
         } catch (Exception e) {
             log.error("Ошибка обработки файла", e);
             throw new RuntimeException("Ошибка обработки файла: " + e.getMessage());
         }
-
-        return results;
     }
 
     private int findColumnIndex(Sheet sheet, String expectedHeader) {

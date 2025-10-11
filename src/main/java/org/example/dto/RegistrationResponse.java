@@ -1,13 +1,18 @@
-// dto/RegistrationResponse.java
 package org.example.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import org.example.entity.Client;
+import lombok.NoArgsConstructor;
+import org.example.entity.Role;
 
 @Data
+@NoArgsConstructor
 @AllArgsConstructor
 public class RegistrationResponse {
-    private Client client;
+    private Long id;
+    private String fullName;
+    private String phone;
     private String token;
+    private Role role;
+
 }

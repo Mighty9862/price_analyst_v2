@@ -93,6 +93,10 @@
             <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
 
         <!-- Javax Annotation API -->
         <dependency>
