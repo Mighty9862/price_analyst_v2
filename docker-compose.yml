@@ -64,7 +64,7 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
     ports:
-      - "8500:8500"
+      - "8400:8400"
     networks:
       - appnet
 

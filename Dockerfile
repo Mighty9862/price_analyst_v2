@@ -30,7 +30,7 @@ COPY --from=builder --chown=appuser:appgroup /app/target/*.jar app.jar
 USER appuser
 
 # Порт приложения
-EXPOSE 8500
+EXPOSE 8400
 
 # Переменные окружения для JVM - оптимизации для больших данных
 ENV JAVA_OPTS="-Xmx2g -Xms1g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:ParallelGCThreads=4 -XX:ConcGCThreads=2"
