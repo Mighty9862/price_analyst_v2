@@ -1,3 +1,4 @@
+// config/SecurityConfig.java
 package org.example.config;
 
 import org.example.security.JwtFilter;
@@ -29,8 +30,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/auth/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()  // Разрешаем Swagger и auth
-                        .requestMatchers("/api/data/**").authenticated()  // Защищаем data
+                        .requestMatchers("/api/auth/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/api/data/upload-supplier-data").hasRole("ADMIN")  // Только админ может загружать данные поставщиков
+                        .requestMatchers("/api/data/**").authenticated()  // Другие data-эндпоинты для аутентифицированных юзеров
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

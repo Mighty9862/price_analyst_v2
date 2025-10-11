@@ -1,3 +1,4 @@
+// service/AuthService.java
 package org.example.service;
 
 import lombok.RequiredArgsConstructor;
@@ -5,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.dto.LoginRequest;
 import org.example.dto.RegistrationRequest;
 import org.example.entity.Client;
+import org.example.entity.Role;
 import org.example.repository.ClientRepository;
 import org.example.security.JwtUtil;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -48,15 +50,18 @@ public class AuthService {
             throw new IllegalArgumentException("Клиент с таким телефоном уже зарегистрирован");
         }
 
+        Role role = clientRepository.count() == 0 ? Role.ADMIN : Role.USER;
+
         Client client = Client.builder()
                 .inn(request.getInn())
                 .fullName(request.getFullName())
                 .phone(normalizedPhone)
                 .password(passwordEncoder.encode(request.getPassword()))
+                .role(role)
                 .build();
 
         Client savedClient = clientRepository.save(client);
-        log.info("Зарегистрирован новый клиент: phone={}, inn={}", normalizedPhone, request.getInn());
+        log.info("Зарегистрирован новый клиент: phone={}, inn={}, role={}", normalizedPhone, request.getInn(), role);
         return savedClient;
     }
 
@@ -65,9 +70,6 @@ public class AuthService {
         if (normalizedPhone == null) {
             throw new IllegalArgumentException("Неверный формат телефона");
         }
-
-        Client client = clientRepository.findByPhone(normalizedPhone)
-                .orElseThrow(() -> new IllegalArgumentException("Клиент с таким телефоном не найден"));
 
         try {
             Authentication authentication = authenticationManager.authenticate(
