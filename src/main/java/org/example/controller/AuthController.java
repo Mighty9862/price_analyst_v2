@@ -4,10 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.example.dto.JwtResponse;
-import org.example.dto.LoginRequest;
-import org.example.dto.RegistrationRequest;
-import org.example.dto.RegistrationResponse;
+import org.example.dto.*;
 import org.example.entity.Client;
 import org.example.service.AuthService;
 import org.example.security.JwtUtil;
@@ -43,8 +40,10 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(summary = "Авторизация клиента", description = "Авторизация по телефону и паролю")
     public ResponseEntity<JwtResponse> login(@Valid @RequestBody LoginRequest request) {
-        String token = authService.login(request);
-        return ResponseEntity.ok(new JwtResponse(token));
+        // Вызываем login из AuthService и мапим результат в JwtResponse
+        LoginResponse loginResponse = authService.login(request);
+        JwtResponse response = new JwtResponse(loginResponse.getToken(), loginResponse.getRole());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/validate-inn")

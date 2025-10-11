@@ -8,7 +8,7 @@ import org.example.entity.Role;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class JwtResponse {
+public class LoginResponse {
     private String token;
     private Role role; // Добавляем поле для роли
 }

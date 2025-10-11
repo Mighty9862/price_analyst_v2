@@ -3,6 +3,7 @@ package org.example.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.dto.LoginRequest;
+import org.example.dto.LoginResponse;
 import org.example.dto.RegistrationRequest;
 import org.example.entity.Client;
 import org.example.entity.Role;
@@ -41,7 +42,6 @@ public class AuthService {
             throw new IllegalArgumentException("Клиент с таким ИНН уже зарегистрирован");
         }
 
-        // Очистка от управляющих символов
         String inn = request.getInn().replaceAll("[\\r\\n\\t]", "");
         String fullName = request.getFullName().replaceAll("[\\r\\n\\t]", "");
         String phone = normalizePhone(request.getPhone());
@@ -69,7 +69,7 @@ public class AuthService {
         return savedClient;
     }
 
-    public String login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request) {
         String phone = normalizePhone(request.getPhone());
         if (phone == null) {
             throw new IllegalArgumentException("Неверный формат телефона");
@@ -81,8 +81,14 @@ public class AuthService {
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
             String token = jwtUtil.generateToken(phone);
-            log.info("Успешная авторизация для телефона: {}", phone);
-            return token;
+
+            // Получаем клиента по телефону и извлекаем роль
+            Client client = clientRepository.findByPhone(phone)
+                    .orElseThrow(() -> new IllegalArgumentException("Клиент не найден"));
+            Role role = client.getRole();
+
+            log.info("Успешная авторизация для телефона: {}, роль: {}", phone, role);
+            return new LoginResponse(token, role);
         } catch (BadCredentialsException e) {
             log.warn("Неудачная попытка авторизации для телефона: {}, причина: неверный пароль", phone);
             throw new IllegalArgumentException("Неверный телефон или пароль");
