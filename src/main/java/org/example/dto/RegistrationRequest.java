@@ -1,3 +1,4 @@
+// dto/RegistrationRequest.java
 package org.example.dto;
 
 import jakarta.validation.constraints.NotBlank;
@@ -12,12 +13,16 @@ public class RegistrationRequest {
     @Pattern(regexp = "\\d{10}|\\d{12}", message = "ИНН должен содержать 10 или 12 цифр")
     private String inn;
 
-    @NotBlank(message = "Имя пользователя не может быть пустым")
-    @Size(min = 2, max = 100, message = "Имя пользователя должно быть от 2 до 100 символов")
-    private String username;
+    @NotBlank(message = "ФИО не может быть пустым")
+    @Size(min = 5, max = 100, message = "ФИО должно быть от 5 до 100 символов")
+    private String fullName;
 
     @NotBlank(message = "Телефон не может быть пустым")
     @Pattern(regexp = "^\\+?[78][-\\(]?\\d{3}\\)?-?\\d{3}-?\\d{2}-?\\d{2}$",
             message = "Неверный формат телефона")
     private String phone;
+
+    @NotBlank(message = "Пароль не может быть пустым")
+    @Size(min = 6, message = "Пароль должен быть не менее 6 символов")
+    private String password;
 }

@@ -1,3 +1,4 @@
+// repository/ClientRepository.java
 package org.example.repository;
 
 import org.example.entity.Client;
@@ -10,4 +11,5 @@ import java.util.Optional;
 public interface ClientRepository extends JpaRepository<Client, Long> {
     boolean existsByInn(String inn);
     Optional<Client> findByInn(String inn);
+    Optional<Client> findByPhone(String phone);
 }

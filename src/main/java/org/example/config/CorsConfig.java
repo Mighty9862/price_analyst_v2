@@ -1,3 +1,4 @@
+// config/CorsConfig.java
 package org.example.config;
 
 import org.springframework.context.annotation.Bean;
