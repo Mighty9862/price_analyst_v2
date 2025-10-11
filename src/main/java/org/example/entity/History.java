@@ -1,6 +1,7 @@
-// entity/History.java
 package org.example.entity;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +9,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "history")
@@ -25,11 +28,26 @@ public class History {
     private Client client;
 
     @Column(columnDefinition = "TEXT")
-    private String requestDetails; // Детали запроса (например, JSON или описание)
+    private String requestDetails;
 
     @Column(columnDefinition = "TEXT")
-    private String responseDetails; // Детали ответа (например, JSON результатов)
+    private String responseDetails;
+
+    @Column(columnDefinition = "TEXT")
+    @Convert(converter = MapListConverter.class) // Применяем конвертер
+    @JsonSerialize
+    @JsonDeserialize
+    private List<Map<String, Object>> fileContent;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private HistoryType historyType;
 
     @Builder.Default
     private LocalDateTime timestamp = LocalDateTime.now();
+
+    public enum HistoryType {
+        FILE_UPLOAD,
+        PRICE_ANALYSIS
+    }
 }

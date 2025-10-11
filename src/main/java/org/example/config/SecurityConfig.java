@@ -41,8 +41,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/api/auth/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        .requestMatchers("/api/data/upload-supplier-data").hasRole("ADMIN")  // Только админ может загружать данные поставщиков
-                        .requestMatchers("/api/data/**").authenticated()  // Другие data-эндпоинты для аутентифицированных юзеров
+                        .requestMatchers("/api/data/upload-supplier-data").hasRole("ADMIN")  // Только админ
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")  // Новый эндпоинт для админа
+                        .requestMatchers("/api/data/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

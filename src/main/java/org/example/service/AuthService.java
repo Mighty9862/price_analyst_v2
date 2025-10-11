@@ -1,4 +1,3 @@
-// service/AuthService.java
 package org.example.service;
 
 import lombok.RequiredArgsConstructor;
@@ -42,52 +41,57 @@ public class AuthService {
             throw new IllegalArgumentException("Клиент с таким ИНН уже зарегистрирован");
         }
 
-        String normalizedPhone = normalizePhone(request.getPhone());
-        if (normalizedPhone == null) {
+        // Очистка от управляющих символов
+        String inn = request.getInn().replaceAll("[\\r\\n\\t]", "");
+        String fullName = request.getFullName().replaceAll("[\\r\\n\\t]", "");
+        String phone = normalizePhone(request.getPhone());
+        String password = request.getPassword().replaceAll("[\\r\\n\\t]", "");
+
+        if (phone == null) {
             throw new IllegalArgumentException("Неверный формат телефона");
         }
-        if (clientRepository.findByPhone(normalizedPhone).isPresent()) {
+        if (clientRepository.findByPhone(phone).isPresent()) {
             throw new IllegalArgumentException("Клиент с таким телефоном уже зарегистрирован");
         }
 
         Role role = clientRepository.count() == 0 ? Role.ADMIN : Role.USER;
 
         Client client = Client.builder()
-                .inn(request.getInn())
-                .fullName(request.getFullName())
-                .phone(normalizedPhone)
-                .password(passwordEncoder.encode(request.getPassword()))
+                .inn(inn)
+                .fullName(fullName)
+                .phone(phone)
+                .password(passwordEncoder.encode(password))
                 .role(role)
                 .build();
 
         Client savedClient = clientRepository.save(client);
-        log.info("Зарегистрирован новый клиент: phone={}, inn={}, role={}", normalizedPhone, request.getInn(), role);
+        log.info("Зарегистрирован новый клиент: phone={}, inn={}, role={}", phone, inn, role);
         return savedClient;
     }
 
     public String login(LoginRequest request) {
-        String normalizedPhone = normalizePhone(request.getPhone());
-        if (normalizedPhone == null) {
+        String phone = normalizePhone(request.getPhone());
+        if (phone == null) {
             throw new IllegalArgumentException("Неверный формат телефона");
         }
 
         try {
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(normalizedPhone, request.getPassword())
+                    new UsernamePasswordAuthenticationToken(phone, request.getPassword())
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            String token = jwtUtil.generateToken(normalizedPhone);
-            log.info("Успешная авторизация для телефона: {}", normalizedPhone);
+            String token = jwtUtil.generateToken(phone);
+            log.info("Успешная авторизация для телефона: {}", phone);
             return token;
         } catch (BadCredentialsException e) {
-            log.warn("Неудачная попытка авторизации для телефона: {}, причина: неверный пароль", normalizedPhone);
+            log.warn("Неудачная попытка авторизации для телефона: {}, причина: неверный пароль", phone);
             throw new IllegalArgumentException("Неверный телефон или пароль");
         }
     }
 
     private String normalizePhone(String phone) {
         if (phone == null) return null;
-        String digits = phone.replaceAll("\\D", "");
+        String digits = phone.replaceAll("[\\r\\n\\t\\D]", ""); // Удаляем все нецифровые символы и управляющие
         if (digits.length() == 11 && (digits.startsWith("7") || digits.startsWith("8"))) {
             return "9" + digits.substring(1);
         } else if (digits.length() == 10 && digits.startsWith("9")) {

@@ -1,5 +1,6 @@
 package org.example.config;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +23,8 @@ public class AppConfig {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.setDateFormat(new SimpleDateFormat("dd.MM.yyyy")); // Формат даты: день.месяц.год
+        // Разрешаем обработку управляющих символов, автоматически экранируя их
+        objectMapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
         return objectMapper;
     }
 }
