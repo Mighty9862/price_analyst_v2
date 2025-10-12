@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/data")
@@ -140,6 +141,39 @@ public class DataController {
                 row.createCell(5).setCellValue(result.getTotalPrice() != null ? result.getTotalPrice() : 0.0);
                 row.createCell(6).setCellValue(result.getRequiresManualProcessing() != null && result.getRequiresManualProcessing() ? "Да" : "Нет");
                 row.createCell(7).setCellValue(result.getMessage() != null ? result.getMessage() : "");
+            }
+
+            // Авторазмер колонок
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(response.getOutputStream());
+        }
+    }
+
+    @PostMapping("/export-history-to-excel")
+    @Operation(summary = "Выгрузка истории в Excel", description = "Скачать Excel файл с историей на основе входного JSON")
+    public void exportHistoryToExcel(@RequestBody List<Map<String, Object>> data, HttpServletResponse response) throws IOException {
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=history_export.xlsx");
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("История");
+
+            // Заголовки (изменён порядок: сначала Штрихкод, затем Количество)
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {"Штрихкод", "Количество"};
+            for (int i = 0; i < headers.length; i++) {
+                headerRow.createCell(i).setCellValue(headers[i]);
+            }
+
+            // Данные (изменён порядок: сначала Штрихкод, затем Количество)
+            int rowNum = 1;
+            for (Map<String, Object> item : data) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(item.get("Штрихкод") != null ? item.get("Штрихкод").toString() : "");
+                row.createCell(1).setCellValue(item.get("Количество") != null ? ((Number) item.get("Количество")).doubleValue() : 0.0);
             }
 
             // Авторазмер колонок
