@@ -23,7 +23,7 @@ services:
 
   app:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: price-service-app
     restart: unless-stopped
@@ -34,7 +34,7 @@ services:
       # Подключение к БД - ВНУТРИ контейнера используем порт 5432
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/price_service
       SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: admin
+      SPRING_DATASOURCE_PASSWORD: 
 
       # JPA настройки
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
@@ -65,6 +65,19 @@ services:
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
     ports:
       - "8400:8400"
+    networks:
+      - appnet
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: price-service-client
+    restart: unless-stopped
+    ports:
+      - "3400:3400"
+    depends_on:
+      - app
     networks:
       - appnet
 
