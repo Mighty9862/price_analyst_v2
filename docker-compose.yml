@@ -34,7 +34,7 @@ services:
       # Подключение к БД - ВНУТРИ контейнера используем порт 5432
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/price_service
       SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: uGQWe_He4YR28iiGK7ltOXLiwznomO
+      SPRING_DATASOURCE_PASSWORD: admin
 
       # JPA настройки
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
