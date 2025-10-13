@@ -179,14 +179,28 @@ function Admin() {
       // Преобразуем fileContent в нужный формат для экспорта
       const exportData = (request.fileContent ?? []).map(
         (item: FileContent) => {
-          // Получаем штрихкод и количество из различных возможных полей
-          const barcode = item.barcode || "";
-          const quantity = item.quantity || 0;
+          // Ищем штрихкод в разных вариантах написания
+          const barcode =
+            item.barcode ||
+            item.Штрихкод ||
+            item["Штрих-код"] ||
+            item.barCode ||
+            item.code ||
+            item.Код ||
+            "";
 
-          // Возвращаем в требуемом формате
+          // Ищем количество
+          const quantity =
+            item.quantity ||
+            item.Количество ||
+            item.qty ||
+            item["Кол-во"] ||
+            item.count ||
+            0;
+
           return {
-            Штрихкод: barcode,
-            Количество: Number(quantity),
+            Штрихкод: String(barcode).trim(),
+            Количество: Number(quantity) || 0,
           };
         },
       );

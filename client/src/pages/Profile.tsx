@@ -28,6 +28,54 @@ interface UserRequest {
   responseDetails: RequestResponse[];
 }
 
+interface SupplierInfo {
+  name: string;
+  inn: string;
+  address: string;
+  phone: string;
+  email: string;
+}
+
+// Функция для парсинга информации о поставщике из строки
+const parseSupplierInfo = (
+  supplierString: string | null,
+): SupplierInfo | null => {
+  if (!supplierString) return null;
+
+  try {
+    // Разделяем строку по запятым
+    const parts = supplierString.split(",").map((part) => part.trim());
+
+    if (parts.length >= 3) {
+      return {
+        name: parts[0], // Название организации
+        inn: parts[1], // ИНН
+        address: parts.slice(2, -2).join(", "), // Адрес (все части кроме первых двух и последних двух)
+        phone: parts[parts.length - 2] || "", // Телефон (предпоследний элемент)
+        email: parts[parts.length - 1] || "", // Email (последний элемент)
+      };
+    }
+
+    // Если формат не соответствует ожидаемому, возвращаем исходную строку
+    return {
+      name: supplierString,
+      inn: "",
+      address: "",
+      phone: "",
+      email: "",
+    };
+  } catch (error) {
+    console.error("Ошибка парсинга информации о поставщике:", error);
+    return {
+      name: supplierString,
+      inn: "",
+      address: "",
+      phone: "",
+      email: "",
+    };
+  }
+};
+
 function Profile() {
   const API_URL = import.meta.env.VITE_API_URL;
   const [user] = useAtom(userAtom);
@@ -44,19 +92,13 @@ function Profile() {
 
   // Функция для загрузки запросов пользователя
   const fetchUserRequests = async () => {
-    if (!user?.token) {
-      setMessage("Ошибка авторизации");
-      setMessageSuccess(false);
-      return;
-    }
-
     setRequestsLoading(true);
     try {
       const response = await axios.get<UserRequest[]>(
         `${API_URL}/profile/history`,
         {
           headers: {
-            Authorization: `Bearer ${user.token}`,
+            Authorization: `Bearer ${user?.token || ""}`,
           },
         },
       );
@@ -65,10 +107,17 @@ function Profile() {
       setMessageSuccess(true);
     } catch (error: any) {
       console.error("Ошибка загрузки запросов:", error);
-      setMessage(
-        error.response?.data?.message || "Ошибка при загрузке истории запросов",
-      );
-      setMessageSuccess(false);
+      if (error.response?.status === 401) {
+        setMessage("Сессия истекла. Пожалуйста, войдите снова.");
+        setMessageSuccess(false);
+        navigate("/login");
+      } else {
+        setMessage(
+          error.response?.data?.message ||
+            "Ошибка при загрузке истории запросов",
+        );
+        setMessageSuccess(false);
+      }
     } finally {
       setRequestsLoading(false);
     }
@@ -85,7 +134,6 @@ function Profile() {
     setDownloadingRequest(request.id);
     try {
       // Преобразуем responseDetails в правильный формат для экспорта
-      // Согласно требованиям, отправляем массив объектов с оригинальными полями
       const exportData = request.responseDetails.map((item) => ({
         barcode: item.barcode,
         quantity: item.quantity,
@@ -97,10 +145,9 @@ function Profile() {
         message: item.message,
       }));
 
-      // Отправляем данные в правильном формате - просто массив объектов
       const response = await axios.post(
         `${API_URL}/data/export-analysis`,
-        exportData, // Отправляем массив напрямую
+        exportData,
         {
           responseType: "blob",
           headers: {
@@ -114,7 +161,6 @@ function Profile() {
       const link = document.createElement("a");
       link.href = url;
 
-      // Создаем имя файла на основе даты запроса
       const fileName = `запрос_${new Date(request.timestamp).toISOString().split("T")[0]}.xlsx`;
       link.setAttribute("download", fileName);
       document.body.appendChild(link);
@@ -190,22 +236,36 @@ function Profile() {
     return { totalItems, foundItems, manualItems, totalPrice };
   };
 
-  // Получение топ-3 поставщиков по количеству товаров для конкретного запроса
-  const getTopSuppliers = (request: UserRequest) => {
-    const supplierCounts: { [key: string]: number } = {};
+  // Получение топ-3 поставщиков с полной информацией
+  const getTopSuppliersWithInfo = (request: UserRequest) => {
+    const supplierMap = new Map<
+      string,
+      { count: number; info: SupplierInfo | null }
+    >();
 
-    // Считаем количество товаров для каждого поставщика
+    // Собираем информацию о поставщиках
     request.responseDetails.forEach((item) => {
       if (item.supplierName && !item.requiresManualProcessing) {
-        supplierCounts[item.supplierName] =
-          (supplierCounts[item.supplierName] || 0) + 1;
+        const supplierInfo = parseSupplierInfo(item.supplierName);
+        const supplierKey = supplierInfo
+          ? supplierInfo.name
+          : item.supplierName;
+
+        if (supplierMap.has(supplierKey)) {
+          supplierMap.get(supplierKey)!.count += 1;
+        } else {
+          supplierMap.set(supplierKey, {
+            count: 1,
+            info: supplierInfo,
+          });
+        }
       }
     });
 
-    // Сортируем поставщиков по количеству товаров (по убыванию)
-    const sortedSuppliers = Object.entries(supplierCounts)
-      .sort(([, countA], [, countB]) => countB - countA)
-      .slice(0, 3); // Берем топ-3
+    // Сортируем поставщиков по количеству товаров (по убыванию) и берем топ-3
+    const sortedSuppliers = Array.from(supplierMap.entries())
+      .sort(([, a], [, b]) => b.count - a.count)
+      .slice(0, 3);
 
     return sortedSuppliers;
   };
@@ -216,10 +276,15 @@ function Profile() {
     supplierName: string,
   ) => {
     return request.responseDetails
-      .filter(
-        (item) =>
-          item.supplierName === supplierName && !item.requiresManualProcessing,
-      )
+      .filter((item) => {
+        const supplierInfo = parseSupplierInfo(item.supplierName);
+        const itemSupplierName = supplierInfo
+          ? supplierInfo.name
+          : item.supplierName;
+        return (
+          itemSupplierName === supplierName && !item.requiresManualProcessing
+        );
+      })
       .reduce((sum, item) => sum + (item.totalPrice || 0), 0);
   };
 
@@ -346,7 +411,7 @@ function Profile() {
                   const isExpanded = expandedRequest === request.id;
                   const isDownloading = downloadingRequest === request.id;
                   const stats = getRequestStats(request);
-                  const topSuppliers = getTopSuppliers(request);
+                  const topSuppliers = getTopSuppliersWithInfo(request);
 
                   return (
                     <motion.div
@@ -461,16 +526,16 @@ function Profile() {
                             className="border-t border-blue-200"
                           >
                             <div className="p-4">
-                              {/* Топ поставщиков (только при раскрытии) */}
+                              {/* Топ поставщиков с полной информацией */}
                               {topSuppliers.length > 0 && (
-                                <div className="border-t border-blue-200 bg-blue-50 p-4">
-                                  <h4 className="mb-3 text-sm font-semibold text-blue-900">
+                                <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                                  <h4 className="mb-4 text-lg font-semibold text-blue-900">
                                     Наиболее подходящие поставщики:
                                   </h4>
-                                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                     {topSuppliers.map(
                                       (
-                                        [supplierName, count],
+                                        [supplierName, { count, info }],
                                         supplierIndex,
                                       ) => {
                                         const supplierTotalPrice =
@@ -486,28 +551,75 @@ function Profile() {
                                             transition={{
                                               delay: supplierIndex * 0.1,
                                             }}
-                                            className="rounded-lg border border-blue-200 bg-white p-3 text-center"
+                                            className="rounded-lg border border-blue-200 bg-white p-4"
                                           >
-                                            <div className="mb-1 text-lg font-bold text-blue-900">
-                                              #{supplierIndex + 1}
+                                            <div className="mb-3 text-center">
+                                              <div className="text-2xl font-bold text-blue-900">
+                                                #{supplierIndex + 1}
+                                              </div>
+                                              <div className="text-lg font-semibold text-blue-800">
+                                                {supplierName}
+                                              </div>
+                                              <div className="text-sm text-blue-600">
+                                                {count} товар
+                                                {count === 1
+                                                  ? ""
+                                                  : count > 1 && count < 5
+                                                    ? "а"
+                                                    : "ов"}
+                                              </div>
+                                              {supplierTotalPrice > 0 && (
+                                                <div className="mt-1 text-lg font-semibold text-green-700">
+                                                  {formatPrice(
+                                                    supplierTotalPrice,
+                                                  )}{" "}
+                                                  ₽
+                                                </div>
+                                              )}
                                             </div>
-                                            <div className="text-md font-semibold text-blue-800">
-                                              {supplierName}
-                                            </div>
-                                            <div className="text-sm text-blue-600">
-                                              {count} товар
-                                              {count === 1
-                                                ? ""
-                                                : count > 1 && count < 5
-                                                  ? "а"
-                                                  : "ов"}
-                                            </div>
-                                            {supplierTotalPrice > 0 && (
-                                              <div className="text-md mt-1 font-semibold text-green-700">
-                                                {formatPrice(
-                                                  supplierTotalPrice,
-                                                )}{" "}
-                                                ₽
+
+                                            {/* Детальная информация о поставщике */}
+                                            {info && (
+                                              <div className="border-t border-blue-200 pt-3 text-sm">
+                                                {info.inn && (
+                                                  <div className="mb-1">
+                                                    <span className="font-semibold">
+                                                      ИНН:
+                                                    </span>{" "}
+                                                    {info.inn}
+                                                  </div>
+                                                )}
+                                                {info.address && (
+                                                  <div className="mb-1">
+                                                    <span className="font-semibold">
+                                                      Адрес:
+                                                    </span>{" "}
+                                                    <span className="break-words">
+                                                      {info.address}
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                {info.phone && (
+                                                  <div className="mb-1">
+                                                    <span className="font-semibold">
+                                                      Телефон:
+                                                    </span>{" "}
+                                                    {info.phone}
+                                                  </div>
+                                                )}
+                                                {info.email && (
+                                                  <div className="mb-1">
+                                                    <span className="font-semibold">
+                                                      Почта/доп. тел.:
+                                                    </span>{" "}
+                                                    <a
+                                                      href={`mailto:${info.email}`}
+                                                      className="break-all text-blue-600 hover:text-blue-800"
+                                                    >
+                                                      {info.email}
+                                                    </a>
+                                                  </div>
+                                                )}
                                               </div>
                                             )}
                                           </motion.div>
@@ -559,48 +671,87 @@ function Profile() {
                                   </thead>
                                   <tbody>
                                     {request.responseDetails.map(
-                                      (item, itemIndex) => (
-                                        <tr
-                                          key={itemIndex}
-                                          className={`border-b border-blue-100 ${
-                                            item.requiresManualProcessing
-                                              ? "bg-amber-50"
-                                              : "bg-white"
-                                          }`}
-                                        >
-                                          <td className="px-3 py-2 font-mono text-blue-900">
-                                            {item.barcode}
-                                          </td>
-                                          <td className="px-3 py-2 text-blue-700">
-                                            {item.productName || "Не найдено"}
-                                          </td>
-                                          <td className="px-3 py-2 text-center text-blue-700">
-                                            {item.quantity}
-                                          </td>
-                                          <td className="px-3 py-2 text-blue-700">
-                                            {item.supplierName || "-"}
-                                          </td>
-                                          <td className="px-3 py-2 text-right text-blue-700">
-                                            {formatPrice(item.unitPrice)}
-                                          </td>
-                                          <td className="px-3 py-2 text-right text-blue-700">
-                                            {formatPrice(item.totalPrice)}
-                                          </td>
-                                          <td className="px-3 py-2">
-                                            <span
-                                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                                item.requiresManualProcessing
-                                                  ? "bg-amber-100 text-amber-800"
-                                                  : "bg-green-100 text-green-800"
-                                              }`}
-                                            >
-                                              {item.requiresManualProcessing
-                                                ? "Обработка"
-                                                : "Найден"}
-                                            </span>
-                                          </td>
-                                        </tr>
-                                      ),
+                                      (item, itemIndex) => {
+                                        const supplierInfo = parseSupplierInfo(
+                                          item.supplierName,
+                                        );
+                                        return (
+                                          <tr
+                                            key={itemIndex}
+                                            className={`border-b border-blue-100 ${
+                                              item.requiresManualProcessing
+                                                ? "bg-amber-50"
+                                                : "bg-white"
+                                            }`}
+                                          >
+                                            <td className="px-3 py-2 font-mono text-blue-900">
+                                              {item.barcode}
+                                            </td>
+                                            <td className="px-3 py-2 text-blue-700">
+                                              {item.productName || "Не найдено"}
+                                            </td>
+                                            <td className="px-3 py-2 text-center text-blue-700">
+                                              {item.quantity}
+                                            </td>
+                                            <td className="px-3 py-2 text-blue-700">
+                                              {supplierInfo ? (
+                                                <div className="text-xs">
+                                                  <div className="font-semibold">
+                                                    {supplierInfo.name}
+                                                  </div>
+                                                  {supplierInfo.inn && (
+                                                    <div>
+                                                      ИНН: {supplierInfo.inn}
+                                                    </div>
+                                                  )}
+                                                  {supplierInfo.address && (
+                                                    <div
+                                                      className="max-w-xs truncate"
+                                                      title={
+                                                        supplierInfo.address
+                                                      }
+                                                    >
+                                                      {supplierInfo.address}
+                                                    </div>
+                                                  )}
+                                                  {supplierInfo.phone && (
+                                                    <div>
+                                                      Тел: {supplierInfo.phone}
+                                                    </div>
+                                                  )}
+                                                  {supplierInfo.email && (
+                                                    <div>
+                                                      Email:{" "}
+                                                      {supplierInfo.email}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                item.supplierName || "-"
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-blue-700">
+                                              {formatPrice(item.unitPrice)}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-blue-700">
+                                              {formatPrice(item.totalPrice)}
+                                            </td>
+                                            <td className="px-3 py-2">
+                                              <span
+                                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                                  item.requiresManualProcessing
+                                                    ? "bg-amber-100 text-amber-800"
+                                                    : "bg-green-100 text-green-800"
+                                                }`}
+                                              >
+                                                {item.requiresManualProcessing
+                                                  ? "Обработка"
+                                                  : "Найден"}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        );
+                                      },
                                     )}
                                   </tbody>
                                 </table>

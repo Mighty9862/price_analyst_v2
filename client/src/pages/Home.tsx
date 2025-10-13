@@ -25,6 +25,54 @@ interface PriceAnalysisResult {
   message: string;
 }
 
+interface SupplierInfo {
+  name: string;
+  inn: string;
+  address: string;
+  phone: string;
+  email: string;
+}
+
+// Функция для парсинга информации о поставщике из строки
+const parseSupplierInfo = (
+  supplierString: string | null,
+): SupplierInfo | null => {
+  if (!supplierString) return null;
+
+  try {
+    // Разделяем строку по запятым
+    const parts = supplierString.split(",").map((part) => part.trim());
+
+    if (parts.length >= 3) {
+      return {
+        name: parts[0], // Название организации
+        inn: parts[1], // ИНН
+        address: parts.slice(2, -2).join(", "), // Адрес (все части кроме первых двух и последних двух)
+        phone: parts[parts.length - 2] || "", // Телефон (предпоследний элемент)
+        email: parts[parts.length - 1] || "", // Email (последний элемент)
+      };
+    }
+
+    // Если формат не соответствует ожидаемому, возвращаем исходную строку
+    return {
+      name: supplierString,
+      inn: "",
+      address: "",
+      phone: "",
+      email: "",
+    };
+  } catch (error) {
+    console.error("Ошибка парсинга информации о поставщике:", error);
+    return {
+      name: supplierString,
+      inn: "",
+      address: "",
+      phone: "",
+      email: "",
+    };
+  }
+};
+
 function Home() {
   const API_URL = import.meta.env.VITE_API_URL;
   const [downloadLoading, setDownloadLoading] = useState(false);
@@ -204,24 +252,53 @@ function Home() {
       .length;
   };
 
-  // Получение топ-3 поставщиков по количеству товаров
-  const getTopSuppliers = () => {
-    const supplierCounts: { [key: string]: number } = {};
+  // Получение топ-3 поставщиков с полной информацией
+  const getTopSuppliersWithInfo = () => {
+    const supplierMap = new Map<
+      string,
+      { count: number; info: SupplierInfo | null }
+    >();
 
-    // Считаем количество товаров для каждого поставщика
+    // Собираем информацию о поставщиках
     analysisResults.forEach((item) => {
       if (item.supplierName && !item.requiresManualProcessing) {
-        supplierCounts[item.supplierName] =
-          (supplierCounts[item.supplierName] || 0) + 1;
+        const supplierInfo = parseSupplierInfo(item.supplierName);
+        const supplierKey = supplierInfo
+          ? supplierInfo.name
+          : item.supplierName;
+
+        if (supplierMap.has(supplierKey)) {
+          supplierMap.get(supplierKey)!.count += 1;
+        } else {
+          supplierMap.set(supplierKey, {
+            count: 1,
+            info: supplierInfo,
+          });
+        }
       }
     });
 
-    // Сортируем поставщиков по количеству товаров (по убыванию)
-    const sortedSuppliers = Object.entries(supplierCounts)
-      .sort(([, countA], [, countB]) => countB - countA)
-      .slice(0, 3); // Берем топ-3
+    // Сортируем поставщиков по количеству товаров (по убыванию) и берем топ-3
+    const sortedSuppliers = Array.from(supplierMap.entries())
+      .sort(([, a], [, b]) => b.count - a.count)
+      .slice(0, 3);
 
     return sortedSuppliers;
+  };
+
+  // Получение общей стоимости по поставщику
+  const getSupplierTotalPrice = (supplierName: string) => {
+    return analysisResults
+      .filter((item) => {
+        const supplierInfo = parseSupplierInfo(item.supplierName);
+        const itemSupplierName = supplierInfo
+          ? supplierInfo.name
+          : item.supplierName;
+        return (
+          itemSupplierName === supplierName && !item.requiresManualProcessing
+        );
+      })
+      .reduce((sum, item) => sum + (item.totalPrice || 0), 0);
   };
 
   return (
@@ -481,37 +558,95 @@ function Home() {
                   </div>
                 </div>
 
-                {/* Топ поставщиков */}
-                {getTopSuppliers().length > 0 && (
+                {/* Топ поставщиков с полной информацией */}
+                {getTopSuppliersWithInfo().length > 0 && (
                   <div className="mb-6">
                     <h4 className="mb-4 text-lg font-semibold text-blue-900">
                       Наиболее подходящие поставщики:
                     </h4>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      {getTopSuppliers().map(([supplierName, count], index) => (
-                        <motion.div
-                          key={supplierName}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center"
-                        >
-                          <div className="mb-2 text-2xl font-bold text-blue-900">
-                            #{index + 1}
-                          </div>
-                          <div className="text-lg font-semibold text-blue-800">
-                            {supplierName}
-                          </div>
-                          <div className="text-md text-blue-600">
-                            {count} товар
-                            {count === 1
-                              ? ""
-                              : count > 1 && count < 5
-                                ? "а"
-                                : "ов"}
-                          </div>
-                        </motion.div>
-                      ))}
+                      {getTopSuppliersWithInfo().map(
+                        ([supplierName, { count, info }], index) => {
+                          const supplierTotalPrice =
+                            getSupplierTotalPrice(supplierName);
+                          return (
+                            <motion.div
+                              key={supplierName}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.1 }}
+                              className="rounded-lg border border-blue-200 bg-white p-4"
+                            >
+                              <div className="mb-3 text-center">
+                                <div className="text-2xl font-bold text-blue-900">
+                                  #{index + 1}
+                                </div>
+                                <div className="text-lg font-semibold text-blue-800">
+                                  {supplierName}
+                                </div>
+                                <div className="text-md text-blue-600">
+                                  {count} товар
+                                  {count === 1
+                                    ? ""
+                                    : count > 1 && count < 5
+                                      ? "а"
+                                      : "ов"}
+                                </div>
+                                {supplierTotalPrice > 0 && (
+                                  <div className="mt-1 text-lg font-semibold text-green-700">
+                                    {formatPrice(supplierTotalPrice)} ₽
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Детальная информация о поставщике */}
+                              {info && (
+                                <div className="border-t border-blue-200 pt-3 text-base">
+                                  {info.inn && (
+                                    <div className="mb-1">
+                                      <span className="font-semibold">
+                                        ИНН:
+                                      </span>{" "}
+                                      {info.inn}
+                                    </div>
+                                  )}
+                                  {info.address && (
+                                    <div className="mb-1">
+                                      <span className="font-semibold">
+                                        Адрес:
+                                      </span>{" "}
+                                      <span className="break-words">
+                                        {info.address}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {info.phone && (
+                                    <div className="mb-1">
+                                      <span className="font-semibold">
+                                        Телефон:
+                                      </span>{" "}
+                                      {info.phone}
+                                    </div>
+                                  )}
+                                  {info.email && (
+                                    <div className="mb-1">
+                                      <span className="font-semibold">
+                                        Email:
+                                      </span>{" "}
+                                      <a
+                                        href={`mailto:${info.email}`}
+                                        className="break-all text-blue-600 hover:text-blue-800"
+                                      >
+                                        {info.email}
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </motion.div>
+                          );
+                        },
+                      )}
                     </div>
                   </div>
                 )}
