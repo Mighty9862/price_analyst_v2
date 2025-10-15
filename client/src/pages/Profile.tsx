@@ -695,36 +695,10 @@ function Profile() {
                                             </td>
                                             <td className="px-3 py-2 text-blue-700">
                                               {supplierInfo ? (
-                                                <div className="text-xs">
+                                                <div className="text-sm">
                                                   <div className="font-semibold">
                                                     {supplierInfo.name}
                                                   </div>
-                                                  {supplierInfo.inn && (
-                                                    <div>
-                                                      ИНН: {supplierInfo.inn}
-                                                    </div>
-                                                  )}
-                                                  {supplierInfo.address && (
-                                                    <div
-                                                      className="max-w-xs truncate"
-                                                      title={
-                                                        supplierInfo.address
-                                                      }
-                                                    >
-                                                      {supplierInfo.address}
-                                                    </div>
-                                                  )}
-                                                  {supplierInfo.phone && (
-                                                    <div>
-                                                      Тел: {supplierInfo.phone}
-                                                    </div>
-                                                  )}
-                                                  {supplierInfo.email && (
-                                                    <div>
-                                                      Email:{" "}
-                                                      {supplierInfo.email}
-                                                    </div>
-                                                  )}
                                                 </div>
                                               ) : (
                                                 item.supplierName || "-"
@@ -738,7 +712,7 @@ function Profile() {
                                             </td>
                                             <td className="px-3 py-2">
                                               <span
-                                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                                className={`inline-flex items-center rounded-full px-2 py-1 text-sm font-medium ${
                                                   item.requiresManualProcessing
                                                     ? "bg-amber-100 text-amber-800"
                                                     : "bg-green-100 text-green-800"

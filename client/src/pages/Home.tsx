@@ -13,7 +13,6 @@ import { userAtom } from "@/store/authStore";
 import AuthModal from "./components/auth/AuthModal";
 import Navbar from "./components/layout/Navbar";
 
-// Обновленный интерфейс согласно новому формату данных
 interface PriceAnalysisResult {
   barcode: string;
   quantity: number;
@@ -33,7 +32,7 @@ interface SupplierInfo {
   email: string;
 }
 
-// Функция для парсинга информации о поставщике из строки
+// Улучшенная функция для парсинга информации о поставщике из строки
 const parseSupplierInfo = (
   supplierString: string | null,
 ): SupplierInfo | null => {
@@ -43,23 +42,57 @@ const parseSupplierInfo = (
     // Разделяем строку по запятым
     const parts = supplierString.split(",").map((part) => part.trim());
 
-    if (parts.length >= 3) {
-      return {
-        name: parts[0], // Название организации
-        inn: parts[1], // ИНН
-        address: parts.slice(2, -2).join(", "), // Адрес (все части кроме первых двух и последних двух)
-        phone: parts[parts.length - 2] || "", // Телефон (предпоследний элемент)
-        email: parts[parts.length - 1] || "", // Email (последний элемент)
-      };
+    if (parts.length === 0) return null;
+
+    // Базовые поля
+    let name = parts[0];
+    let inn = "";
+    let address = "";
+    let phone = "";
+    let email = "";
+
+    // Ищем ИНН (обычно второй элемент, состоит из 10 или 12 цифр)
+    if (parts.length > 1 && /^\d{10,12}$/.test(parts[1])) {
+      inn = parts[1];
     }
 
-    // Если формат не соответствует ожидаемому, возвращаем исходную строку
+    // Ищем email (последний элемент, содержит @)
+    const emailIndex = parts.findIndex((part) => part.includes("@"));
+    if (emailIndex !== -1) {
+      email = parts[emailIndex];
+    }
+
+    // Ищем телефоны (содержат цифры, скобки, дефисы)
+    const phonePattern = /^[78]\s?\(\d{3}\)\s?\d{3}[- ]?\d{2}[- ]?\d{2}$/;
+    const phones = parts.filter((part) => phonePattern.test(part));
+
+    if (phones.length > 0) {
+      // Объединяем все телефоны через запятую
+      phone = phones.join(", ");
+    }
+
+    // Адрес - все что между ИНН и телефонами/email
+    let addressStartIndex = inn ? 2 : 1;
+    let addressEndIndex = emailIndex !== -1 ? emailIndex : parts.length;
+
+    // Если нашли телефоны, корректируем конец адреса
+    if (phones.length > 0) {
+      const firstPhoneIndex = parts.findIndex((part) =>
+        phonePattern.test(part),
+      );
+      addressEndIndex = Math.min(addressEndIndex, firstPhoneIndex);
+    }
+
+    if (addressEndIndex > addressStartIndex) {
+      address = parts.slice(addressStartIndex, addressEndIndex).join(", ");
+    }
+
     return {
-      name: supplierString,
-      inn: "",
-      address: "",
-      phone: "",
-      email: "",
+      name,
+      inn,
+      address,
+      phone,
+      email,
     };
   } catch (error) {
     console.error("Ошибка парсинга информации о поставщике:", error);
@@ -71,6 +104,45 @@ const parseSupplierInfo = (
       email: "",
     };
   }
+};
+
+// Функция для группировки товаров по поставщикам
+const groupProductsBySupplier = (results: PriceAnalysisResult[]) => {
+  const supplierMap = new Map<string, PriceAnalysisResult[]>();
+
+  results.forEach((item) => {
+    if (!item.requiresManualProcessing && item.supplierName) {
+      const supplierInfo = parseSupplierInfo(item.supplierName);
+      const supplierKey = supplierInfo ? supplierInfo.name : item.supplierName;
+
+      if (supplierMap.has(supplierKey)) {
+        supplierMap.get(supplierKey)!.push(item);
+      } else {
+        supplierMap.set(supplierKey, [item]);
+      }
+    }
+  });
+
+  return Array.from(supplierMap.entries()).map(([supplierName, products]) => {
+    const firstProduct = products[0];
+    const supplierInfo = parseSupplierInfo(firstProduct.supplierName);
+
+    return {
+      supplierName,
+      supplierInfo,
+      products,
+      totalCost: products.reduce(
+        (sum, product) => sum + (product.totalPrice || 0),
+        0,
+      ),
+      productCount: products.length,
+    };
+  });
+};
+
+// Функция для получения товаров, требующих ручной обработки
+const getManualProcessingProducts = (results: PriceAnalysisResult[]) => {
+  return results.filter((item) => item.requiresManualProcessing);
 };
 
 function Home() {
@@ -413,7 +485,7 @@ function Home() {
                 <div className="mb-4">
                   <label
                     htmlFor="file-upload"
-                    className="mb-3 flex items-center text-sm font-medium text-blue-700"
+                    className="text-md mb-3 flex items-center font-medium text-blue-700"
                   >
                     <FileIcon />
                     <span className="ml-2">Выберите файл для анализа:</span>
@@ -423,7 +495,7 @@ function Home() {
                     type="file"
                     accept=".xlsx,.xls,.csv"
                     onChange={handleFileSelect}
-                    className="block w-full text-sm text-blue-700 transition-colors file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-3 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+                    className="text-md file:text-md block w-full text-blue-700 transition-colors file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-3 file:font-medium file:text-white hover:file:bg-blue-700"
                   />
                 </div>
 
@@ -433,7 +505,7 @@ function Home() {
                     animate={{ opacity: 1 }}
                     className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3"
                   >
-                    <p className="flex items-center text-sm text-blue-700">
+                    <p className="text-md flex items-center text-blue-700">
                       <FileIcon />
                       <span className="ml-2">
                         Выбран файл: <strong>{selectedFile.name}</strong>
@@ -581,7 +653,7 @@ function Home() {
                                 <div className="text-2xl font-bold text-blue-900">
                                   #{index + 1}
                                 </div>
-                                <div className="text-lg font-semibold text-blue-800">
+                                <div className="text-xl font-semibold text-blue-800">
                                   {supplierName}
                                 </div>
                                 <div className="text-md text-blue-600">
@@ -601,7 +673,7 @@ function Home() {
 
                               {/* Детальная информация о поставщике */}
                               {info && (
-                                <div className="border-t border-blue-200 pt-3 text-base">
+                                <div className="text-md border-t border-blue-200 pt-3">
                                   {info.inn && (
                                     <div className="mb-1">
                                       <span className="font-semibold">
@@ -623,9 +695,15 @@ function Home() {
                                   {info.phone && (
                                     <div className="mb-1">
                                       <span className="font-semibold">
-                                        Телефон:
+                                        Телефоны:
                                       </span>{" "}
-                                      {info.phone}
+                                      {info.phone
+                                        .split(", ")
+                                        .map((phone, idx) => (
+                                          <div key={idx} className="text-md">
+                                            {phone}
+                                          </div>
+                                        ))}
                                     </div>
                                   )}
                                   {info.email && (
@@ -633,12 +711,7 @@ function Home() {
                                       <span className="font-semibold">
                                         Email:
                                       </span>{" "}
-                                      <a
-                                        href={`mailto:${info.email}`}
-                                        className="break-all text-blue-600 hover:text-blue-800"
-                                      >
-                                        {info.email}
-                                      </a>
+                                      {info.email}
                                     </div>
                                   )}
                                 </div>
@@ -647,6 +720,212 @@ function Home() {
                           );
                         },
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Построчное разделение поставщиков с их товарами */}
+                {groupProductsBySupplier(analysisResults).length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="mb-4 text-lg font-semibold text-blue-900">
+                      Товары по поставщикам:
+                    </h4>
+
+                    {groupProductsBySupplier(analysisResults).map(
+                      (supplierGroup, supplierIndex) => (
+                        <motion.div
+                          key={supplierGroup.supplierName}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: supplierIndex * 0.1 }}
+                          className="mb-8 rounded-lg border border-blue-200 bg-white"
+                        >
+                          {/* Заголовок поставщика */}
+                          <div className="border-b border-blue-200 bg-blue-50 p-4">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                              <div className="mb-2 md:mb-0">
+                                <h5 className="text-lg font-semibold text-blue-900">
+                                  {supplierGroup.supplierName}
+                                </h5>
+                                {supplierGroup.supplierInfo && (
+                                  <div className="text-md mt-1 text-blue-700">
+                                    {supplierGroup.supplierInfo.inn && (
+                                      <span className="mr-4">
+                                        <strong>ИНН:</strong>{" "}
+                                        {supplierGroup.supplierInfo.inn}
+                                      </span>
+                                    )}
+                                    {supplierGroup.supplierInfo.phone && (
+                                      <div className="mt-1">
+                                        <strong>Телефоны:</strong>{" "}
+                                        {supplierGroup.supplierInfo.phone
+                                          .split(", ")
+                                          .map((phone, idx) => (
+                                            <span key={idx} className="mr-2">
+                                              {phone}
+                                            </span>
+                                          ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-lg text-blue-700">
+                                <div className="font-semibold">
+                                  Всего товаров: {supplierGroup.productCount}
+                                </div>
+                                <div className="font-semibold text-green-700">
+                                  Общая стоимость:{" "}
+                                  {formatPrice(supplierGroup.totalCost)} ₽
+                                </div>
+                              </div>
+                            </div>
+                            {supplierGroup.supplierInfo?.address && (
+                              <div className="text-md mt-2 text-blue-600">
+                                <strong>Адрес:</strong>{" "}
+                                {supplierGroup.supplierInfo.address}
+                              </div>
+                            )}
+                            {supplierGroup.supplierInfo?.email && (
+                              <div className="text-md mt-1 text-blue-600">
+                                <strong>Email:</strong>{" "}
+                                {supplierGroup.supplierInfo.email}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Таблица товаров поставщика с прокруткой */}
+                          <div className="relative">
+                            <div
+                              className={`overflow-x-auto ${
+                                supplierGroup.products.length > 8
+                                  ? "max-h-72 overflow-y-auto"
+                                  : ""
+                              }`}
+                            >
+                              <table className="text-md w-full">
+                                <thead className="sticky top-0 z-10 bg-blue-100">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-blue-900">
+                                      Штрихкод
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-blue-900">
+                                      Наименование
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-blue-900">
+                                      Кол-во
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-blue-900">
+                                      Цена за шт.
+                                    </th>
+                                    <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-blue-900">
+                                      Сумма
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {supplierGroup.products.map(
+                                    (product, productIndex) => (
+                                      <tr
+                                        key={`${supplierGroup.supplierName}-${product.barcode}-${productIndex}`}
+                                        className="border-b border-blue-100 hover:bg-blue-50"
+                                      >
+                                        <td className="px-3 py-2 font-mono whitespace-nowrap text-blue-900">
+                                          {product.barcode}
+                                        </td>
+                                        <td className="px-3 py-2 text-blue-700">
+                                          {product.productName || "Не указано"}
+                                        </td>
+                                        <td className="px-3 py-2 text-center whitespace-nowrap text-blue-700">
+                                          {product.quantity}
+                                        </td>
+                                        <td className="px-3 py-2 text-right whitespace-nowrap text-blue-700">
+                                          {formatPrice(product.unitPrice)}
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-semibold whitespace-nowrap text-blue-700">
+                                          {formatPrice(product.totalPrice)}
+                                        </td>
+                                      </tr>
+                                    ),
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ),
+                    )}
+                  </div>
+                )}
+
+                {/* Таблица с товарами, которые не были найдены */}
+                {getManualProcessingProducts(analysisResults).length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="mb-4 text-lg font-semibold text-amber-900">
+                      Товары, требующие ручной обработки:
+                    </h4>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50">
+                      <div className="relative">
+                        <div
+                          className={`overflow-x-auto ${
+                            getManualProcessingProducts(analysisResults)
+                              .length > 8
+                              ? "max-h-96 overflow-y-auto"
+                              : ""
+                          }`}
+                        >
+                          <table className="text-md w-full">
+                            <thead className="sticky top-0 z-10 bg-amber-100">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-amber-900">
+                                  Штрихкод
+                                </th>
+                                <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-amber-900">
+                                  Наименование
+                                </th>
+                                <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-amber-900">
+                                  Кол-во
+                                </th>
+                                <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-amber-900">
+                                  Сообщение
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {getManualProcessingProducts(analysisResults).map(
+                                (product, index) => (
+                                  <tr
+                                    key={`not-found-${product.barcode}-${index}`}
+                                    className="border-b border-amber-200 hover:bg-amber-100"
+                                  >
+                                    <td className="px-3 py-2 font-mono whitespace-nowrap text-amber-900">
+                                      {product.barcode}
+                                    </td>
+                                    <td className="px-3 py-2 text-amber-700">
+                                      {product.productName || "Не найдено"}
+                                    </td>
+                                    <td className="px-3 py-2 text-center whitespace-nowrap text-amber-700">
+                                      {product.quantity}
+                                    </td>
+                                    <td className="px-3 py-2 text-amber-700">
+                                      {product.message ||
+                                        "Требуется ручная обработка"}
+                                    </td>
+                                  </tr>
+                                ),
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Индикатор прокрутки для больших таблиц */}
+                        {getManualProcessingProducts(analysisResults).length >
+                          8 && (
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 transform rounded-full bg-amber-600 px-3 py-1 text-xs text-white opacity-90">
+                            Прокрутите для просмотра всех товаров
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -704,7 +983,7 @@ function Home() {
                     <h4 className="mb-2 font-semibold text-blue-900">
                       Скачайте шаблон
                     </h4>
-                    <p className="text-sm text-blue-700">
+                    <p className="text-md text-blue-700">
                       Получите готовый файл Excel с правильной структурой для
                       заполнения
                     </p>
@@ -716,7 +995,7 @@ function Home() {
                     <h4 className="mb-2 font-semibold text-blue-900">
                       Заполните данные
                     </h4>
-                    <p className="text-sm text-blue-700">
+                    <p className="text-md text-blue-700">
                       Внесите информацию о товарах: штрих-коды и количество
                     </p>
                   </div>
@@ -727,7 +1006,7 @@ function Home() {
                     <h4 className="mb-2 font-semibold text-blue-900">
                       Получите анализ
                     </h4>
-                    <p className="text-sm text-blue-700">
+                    <p className="text-md text-blue-700">
                       Система автоматически подберет поставщиков с лучшими
                       ценами
                     </p>
