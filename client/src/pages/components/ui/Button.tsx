@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 
 const Button = ({
   children,
@@ -15,7 +15,7 @@ const Button = ({
   onClick?: (e: MouseEvent<HTMLButtonElement>) => void; // ← изменено
   disabled?: boolean;
 }) => (
-  <motion.button
+  <m.button
     className={`rounded-lg px-6 py-3 text-lg font-medium transition-colors ${
       primary
         ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-700"
@@ -30,7 +30,7 @@ const Button = ({
     {...rest}
   >
     {children}
-  </motion.button>
+  </m.button>
 );
 
 export default Button;

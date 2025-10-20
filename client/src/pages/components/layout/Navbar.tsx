@@ -4,7 +4,12 @@ import { isAdminAtom, isAuthAtom } from "@/store/authStore";
 import { useNavigate } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
 
-function Navbar({ setIsAuthModalOpen }: { setIsAuthModalOpen: Dispatch<SetStateAction<boolean>> }) {
+interface NavbarProps {
+  setIsLoginModalOpen: Dispatch<SetStateAction<boolean>>;
+  setIsRegisterModalOpen: Dispatch<SetStateAction<boolean>>;
+}
+
+function Navbar({ setIsLoginModalOpen, setIsRegisterModalOpen }: NavbarProps) {
   const [isAuth] = useAtom(isAuthAtom);
   const [isAdmin] = useAtom(isAdminAtom);
 
@@ -32,7 +37,14 @@ function Navbar({ setIsAuthModalOpen }: { setIsAuthModalOpen: Dispatch<SetStateA
           <Button onClick={handleLogout}>Выйти</Button>
         </div>
       ) : (
-        <Button onClick={() => setIsAuthModalOpen(true)}>Войти</Button>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setIsRegisterModalOpen(true)}
+          >
+            Регистрация
+          </Button>
+          <Button onClick={() => setIsLoginModalOpen(true)}>Войти</Button>
+        </div>
       )}
     </div>
   );
