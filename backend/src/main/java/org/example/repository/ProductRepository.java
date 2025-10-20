@@ -14,6 +14,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByBarcodeIn(List<String> barcodes);
 
+    // Новый метод для поиска всех товаров по штрихкоду
+    List<Product> findByBarcode(String barcode);
+
     @Query("SELECT p FROM Product p WHERE p.barcode IN :barcodes ORDER BY p.barcode, p.priceWithVat ASC")
     List<Product> findByBarcodesOrderedByPrice(@Param("barcodes") List<String> barcodes);
 

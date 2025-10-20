@@ -26,6 +26,8 @@ import org.example.dto.InvoiceItemRequest;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/data")
@@ -145,6 +147,149 @@ public class DataController {
                 row.createCell(5).setCellValue(result.getTotalPrice() != null ? result.getTotalPrice() : 0.0);
                 row.createCell(6).setCellValue(result.getRequiresManualProcessing() != null && result.getRequiresManualProcessing() ? "Да" : "Нет");
                 row.createCell(7).setCellValue(result.getMessage() != null ? result.getMessage() : "");
+            }
+
+            // Авторазмер колонок
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(response.getOutputStream());
+        }
+    }
+
+    @PostMapping("/export-detailed-analysis")
+    @Operation(summary = "Выгрузка детального анализа цен в Excel", description = "Скачать Excel файл с детальным анализом всех цен по каждому товару")
+    public void exportDetailedAnalysis(@RequestBody List<PriceAnalysisResult> results, HttpServletResponse response) throws IOException {
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=detailed_price_analysis_export.xlsx");
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Детальный анализ цен");
+
+            // Создаем стили
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
+            CellStyle numberStyle = workbook.createCellStyle();
+            numberStyle.setDataFormat(workbook.createDataFormat().getFormat("#,##0.00"));
+
+            CellStyle percentageStyle = workbook.createCellStyle();
+            percentageStyle.setDataFormat(workbook.createDataFormat().getFormat("0.00\"%\""));
+
+            // Заголовки
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {"Штрихкод", "Количество", "Наименование товара", "Поставщик", "Цена за единицу", "Процент", "Общая сумма", "Требует ручной обработки"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+
+            for (PriceAnalysisResult result : results) {
+                if (result.getRequiresManualProcessing() != null && result.getRequiresManualProcessing()) {
+                    // Товары, требующие ручной обработки
+                    Row row = sheet.createRow(rowNum++);
+                    row.createCell(0).setCellValue(result.getBarcode() != null ? result.getBarcode() : "");
+                    row.createCell(1).setCellValue(result.getQuantity() != null ? result.getQuantity() : 0);
+                    row.createCell(2).setCellValue("Товар не найден");
+                    row.createCell(3).setCellValue("");
+                    row.createCell(4).setCellValue("");
+                    row.createCell(5).setCellValue("");
+                    row.createCell(6).setCellValue("");
+                    row.createCell(7).setCellValue("Да");
+                } else {
+                    // Получаем все предложения по этому штрихкоду
+                    List<Product> allProducts = productRepository.findByBarcode(result.getBarcode());
+                    
+                    if (allProducts.isEmpty()) {
+                        // Если товар не найден в базе
+                        Row row = sheet.createRow(rowNum++);
+                        row.createCell(0).setCellValue(result.getBarcode() != null ? result.getBarcode() : "");
+                        row.createCell(1).setCellValue(result.getQuantity() != null ? result.getQuantity() : 0);
+                        row.createCell(2).setCellValue("Товар не найден в базе");
+                        row.createCell(3).setCellValue("");
+                        row.createCell(4).setCellValue("");
+                        row.createCell(5).setCellValue("");
+                        row.createCell(6).setCellValue("");
+                        row.createCell(7).setCellValue("Да");
+                    } else {
+                        // Сортируем товары по цене (от меньшей к большей)
+                        List<Product> sortedProducts = allProducts.stream()
+                                .filter(p -> p.getPriceWithVat() != null)
+                                .sorted(Comparator.comparing(Product::getPriceWithVat))
+                                .collect(Collectors.toList());
+
+                        if (sortedProducts.isEmpty()) {
+                            // Если все товары без цены
+                            Row row = sheet.createRow(rowNum++);
+                            row.createCell(0).setCellValue(result.getBarcode() != null ? result.getBarcode() : "");
+                            row.createCell(1).setCellValue(result.getQuantity() != null ? result.getQuantity() : 0);
+                            row.createCell(2).setCellValue(result.getProductName() != null ? result.getProductName() : "");
+                            row.createCell(3).setCellValue("");
+                            row.createCell(4).setCellValue("");
+                            row.createCell(5).setCellValue("");
+                            row.createCell(6).setCellValue("");
+                            row.createCell(7).setCellValue("Нет");
+                        } else {
+                            Double bestPrice = sortedProducts.get(0).getPriceWithVat();
+                            boolean isFirstRow = true;
+
+                            for (Product product : sortedProducts) {
+                                Row row = sheet.createRow(rowNum++);
+                                
+                                if (isFirstRow) {
+                                    // Первая строка - лучшая цена
+                                    row.createCell(0).setCellValue(result.getBarcode() != null ? result.getBarcode() : "");
+                                    row.createCell(1).setCellValue(result.getQuantity() != null ? result.getQuantity() : 0);
+                                    row.createCell(2).setCellValue(result.getProductName() != null ? result.getProductName() : "");
+                                    row.createCell(3).setCellValue(product.getSupplier().getSupplierName());
+                                    
+                                    Cell priceCell = row.createCell(4);
+                                    priceCell.setCellValue(product.getPriceWithVat());
+                                    priceCell.setCellStyle(numberStyle);
+                                    
+                                    // Процент для лучшей цены = 0%
+                                    Cell percentageCell = row.createCell(5);
+                                    percentageCell.setCellValue(0.0);
+                                    percentageCell.setCellStyle(percentageStyle);
+                                    
+                                    // Общая сумма
+                                    Double totalPrice = product.getPriceWithVat() * result.getQuantity();
+                                    Cell totalCell = row.createCell(6);
+                                    totalCell.setCellValue(totalPrice);
+                                    totalCell.setCellStyle(numberStyle);
+                                    
+                                    row.createCell(7).setCellValue("Нет");
+                                    isFirstRow = false;
+                                } else {
+                                    // Последующие строки - другие предложения
+                                    row.createCell(0).setCellValue("");
+                                    row.createCell(1).setCellValue("");
+                                    row.createCell(2).setCellValue("");
+                                    row.createCell(3).setCellValue(product.getSupplier().getSupplierName());
+                                    
+                                    Cell priceCell = row.createCell(4);
+                                    priceCell.setCellValue(product.getPriceWithVat());
+                                    priceCell.setCellStyle(numberStyle);
+                                    
+                                    // Расчет процента разницы от лучшей цены
+                                    double percentage = ((product.getPriceWithVat() - bestPrice) / bestPrice) * 100;
+                                    Cell percentageCell = row.createCell(5);
+                                    percentageCell.setCellValue(percentage);
+                                    percentageCell.setCellStyle(percentageStyle);
+                                    
+                                    row.createCell(6).setCellValue("");
+                                    row.createCell(7).setCellValue("");
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Авторазмер колонок
