@@ -45,7 +45,7 @@ export const ProductTable = ({
                   </span>
                 )}
                 {supplierGroup.supplierInfo.phone && (
-                  <div className="mt-1">
+                  <div>
                     <strong>Телефоны:</strong>{" "}
                     {supplierGroup.supplierInfo.phone
                       .split(", ")
@@ -59,7 +59,7 @@ export const ProductTable = ({
               </div>
             )}
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-3">
             <div className="text-lg text-blue-700">
               <div className="font-semibold">
                 Всего товаров: {supplierGroup.productCount}
